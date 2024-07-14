@@ -1,15 +1,17 @@
-import gradio as gr
-import os
-from dotenv import load_dotenv
-import fitz  # PyMuPDF
-from langchain.embeddings import HuggingFaceEmbeddings
-from langchain.vectorstores import FAISS
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-import openai  # Correct import for openai library
+# Import necessary libraries
+import gradio as gr  # Gradio for creating the interface
+import os  # Operating system utilities
+from dotenv import load_dotenv  # Load environment variables from .env file
+import fitz  # PyMuPDF for working with PDFs
+from langchain.embeddings import HuggingFaceEmbeddings  # Embeddings for natural language processing
+from langchain.vectorstores import FAISS  # Vector store for efficient retrieval
+from langchain.text_splitter import RecursiveCharacterTextSplitter  # Text splitter utility
+import openai  # OpenAI library for using GPT-3.5
 
+# Load environment variables from .env file
 load_dotenv()
 api_key = os.getenv("OPENAI_API_KEY")
-openai.api_key = api_key  # Set the API key globally for openai library
+openai.api_key = api_key  # Set the API key globally for OpenAI library
 
 # Function to extract text from PDF
 def extract_text_from_pdf(pdf_path):
@@ -51,7 +53,7 @@ def generate_cover_letter(pdf_path, job_role, company_name, company_context):
     chunks = split_text_into_chunks(text)
     # Create vector store
     vector_store = create_vector_store(chunks)
-    # Perform RAG
+    # Perform RAG to get candidate profile
     candidate_profile = perform_rag(vector_store, job_role)
 
     # Define the prompt for OpenAI API
