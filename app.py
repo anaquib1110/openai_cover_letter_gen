@@ -1,14 +1,15 @@
 import gradio as gr
 import os
+from dotenv import load_dotenv
 import fitz  # PyMuPDF
 from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.vectorstores import FAISS
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_groq import ChatGroq
-from langchain_core.prompts import ChatPromptTemplate
+import openai  # Correct import for openai library
 
-# Set the API key as an environment variable
-os.environ["GROQ_API_KEY"] #if using Open AI change to "OPENAI_API_KEY"
+load_dotenv()
+api_key = os.getenv("OPENAI_API_KEY")
+openai.api_key = api_key  # Set the API key globally for openai library
 
 # Function to extract text from PDF
 def extract_text_from_pdf(pdf_path):
@@ -42,17 +43,7 @@ def perform_rag(vector_store, query):
     context = " ".join([doc.page_content for doc in docs])
     return context
 
-# Function to parse output
-def parse_output(output):
-    # Directly access the content of the AIMessage object
-    output_content = output.content
-    start_index = output_content.find('content="') + len('content="')
-    end_index = output_content.rfind('"')
-    parsed_content = output_content[start_index:end_index]
-    parsed_content = parsed_content.replace('\\n', '\n')
-    return parsed_content
-
-# Create Gradio interface function with topic as input
+# Function to generate cover letter using OpenAI API
 def generate_cover_letter(pdf_path, job_role, company_name, company_context):
     # Extract text from PDF
     text = extract_text_from_pdf(pdf_path)
@@ -63,16 +54,8 @@ def generate_cover_letter(pdf_path, job_role, company_name, company_context):
     # Perform RAG
     candidate_profile = perform_rag(vector_store, job_role)
 
-    # Load the Groq model
-    chat = ChatGroq(
-        temperature=0.5,
-        model="llama3-70b-8192", #define model available on Groq
-        api_key=os.getenv("GROQ_API_KEY")
-    )
-
-    # Define the prompt
-    system = "You are expert career coach and consultant. You will generate well made and proper cover letetr based on user profile and user input."
-    human = """
+    # Define the prompt for OpenAI API
+    prompt = f"""
     So, I am applying for {job_role} at {company_name}
     =================
     {company_context}
@@ -81,15 +64,19 @@ def generate_cover_letter(pdf_path, job_role, company_name, company_context):
     =================
     From the company profile and my profile, please create a cover letter for the {job_role} position. Ensure that it is well-crafted and engaging for recruiters and hiring managers. Also, verify that my recent work experience and academic background align with the role I am applying for.
     """
-    prompt = ChatPromptTemplate.from_messages([("system", system), ("human", human)])
 
-    # Define LangChain
-    chain = prompt | chat
-    output = chain.invoke({"job_role": job_role, "company_name": company_name, "company_context": company_context, "candidate_profile": candidate_profile})
-    # Parse output
-    parsed_output = parse_output(output)
-    
-    return parsed_output
+    # Call OpenAI API to generate cover letter
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {"role": "system", "content": prompt}
+        ],
+        max_tokens=500
+    )
+
+    generated_cover_letter = response['choices'][0]['message']['content'].strip()
+
+    return generated_cover_letter
 
 # Create Gradio interface
 gr.Interface(
@@ -97,7 +84,7 @@ gr.Interface(
     inputs=[
         gr.File(label="Upload ATS Resume (PDF)", file_types=[".pdf"]),
         gr.Textbox(label="Job Role", placeholder="Ex: Data Scientist, Fullstack Developer, etc."),
-        gr.Textbox(label="Company Name", placeholder="Enter a company name you applying"),
+        gr.Textbox(label="Company Name", placeholder="Enter a company name you are applying to"),
         gr.Textbox(label="Company Context", placeholder="Enter a brief description of the company")
     ],
     outputs=gr.Textbox(label="Generated Cover Letter", show_copy_button=True),
